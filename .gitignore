@@ -3,3 +3,6 @@ target/
 dbt_packages/
 logs/
 .env
+data/orders.csv
+data/order_items.csv
+data/menu.csv
