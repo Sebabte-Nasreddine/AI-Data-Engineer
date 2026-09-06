@@ -1,6 +1,6 @@
 sources:
   - name: raw
-    database: ZOMATO
+    database: zomato
     schema: RAW
     tables:
       - name: restaurants
