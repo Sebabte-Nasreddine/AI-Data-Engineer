@@ -80,7 +80,6 @@ def get_reviews_to_enrich(cursor):
 def classify_review(comment):
     response = client.chat.completions.create(
         model=MODEL,
-        temperature=0,
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -102,3 +101,43 @@ def save_results(cursor, results):
         """,
         results,
     )
+
+
+
+def main():
+    conn = get_connection()
+    cursor = conn.cursor()
+    create_output_table(cursor)
+    reviews = get_reviews_to_enrich(cursor)
+
+    if len(reviews) == 0:
+        print("No new reviews to enrich.")
+        return
+
+    print(f"Enriching {len(reviews)} reviews...")
+
+    results = []
+    for review_id, comment in reviews:
+        print(f"Classifying review {review_id}: {comment}")
+        try:
+            labels = classify_review(comment)
+            print(f"Labels for review {review_id}: {labels}")
+            results.append((
+                review_id,
+                labels["sentiment_label"],
+                labels["sentiment_score"],
+                labels["topic"],
+                labels["key_issue"],
+                MODEL
+            ))
+        except Exception as e:
+            print(f"Error occurred while classifying review {review_id}: {e}")
+
+    save_results(cursor, results)
+    print(f"Saved {len(results)} enriched reviews to Snowflake.")
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+if __name__ == "__main__":
+    main()
