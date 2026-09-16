@@ -3,6 +3,10 @@ import json
 import snowflake.connector 
 from openai import OpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 endpoint = "https://foragent07-resource.services.ai.azure.com/openai/v1"
 deployment_name = "gpt-5.6-sol"
@@ -35,3 +39,53 @@ Reply as JSON in this exact format:
     "topic": "<topic>",
     "key_issue": "<key_issue>"}}
 """
+
+def get_connection():
+    return snowflake.connector.connect(
+        user=os.getenv("SNOWFLAKE_USER"),
+        password=os.getenv("SNOWFLAKE_PASSWORD"),
+        account=os.getenv("SNOWFLAKE_ACCOUNT"),
+        warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
+        database=os.getenv("SNOWFLAKE_DATABASE"),
+        schema=os.getenv("SNOWFLAKE_SCHEMA"),
+    )
+
+
+
+def create_output_table(cursor):
+    cursor.execute("CREATE SCHEMA IF NOT EXISTS ZOMATO.AI")
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ZOMATO.AI.REVIEW_ENRICHED (
+            REVIEW_ID STRING,
+            SENTIMENT_LABEL STRING,
+            SENTIMENT_SCORE FLOAT,
+            TOPIC STRING,
+            KEY_ISSUE STRING,
+            MODEL STRING,
+            ENRICHED_AT TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP()
+        )
+    """)
+
+
+def get_reviews_to_enrich(cursor):
+    cursor.execute(f"""
+        SELECT REVIEW_ID, COMMENT
+        FROM ZOMATO.RAW.REVIEWS
+        WHERE REVIEW_ID NOT IN (SELECT REVIEW_ID FROM ZOMATO.AI.REVIEW_ENRICHED)
+        LIMIT {SAMPLE_N}
+    """)
+    return cursor.fetchall()
+
+
+def classify_review(comment):
+    response = client.chat.completions.create(
+        model=MODEL,
+        temperature=0,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": comment}
+        ]
+    )
+    answer = response.choices[0].message.content
+    return json.loads(answer)
