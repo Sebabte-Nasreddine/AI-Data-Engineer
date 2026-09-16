@@ -89,3 +89,16 @@ def classify_review(comment):
     )
     answer = response.choices[0].message.content
     return json.loads(answer)
+
+
+def save_results(cursor, results):
+    """Insert all the enriched rows into Snowflake in one go."""
+    print(f"Saving {len(results)} enriched reviews to Snowflake...")
+    cursor.executemany(
+        """
+        INSERT INTO ZOMATO.AI.REVIEW_ENRICHED
+            (review_id, sentiment_label, sentiment_score, topic, key_issue, model)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+        results,
+    )
