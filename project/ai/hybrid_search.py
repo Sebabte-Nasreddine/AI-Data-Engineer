@@ -142,8 +142,8 @@ def hybrid_search(query: str, filters: dict | None = None, limit: int = 50):
 if __name__ == "__main__":
     # test rapide en ligne de commande
     points = hybrid_search(
-        "Gravy spilled all over the bag",
-        filters={"sentiment_label": "negative"},
+        "what this the more late laivraison do",
+        filters={"sentiment_label": "unknown"},
         limit=10,
     )
     for p in points:
