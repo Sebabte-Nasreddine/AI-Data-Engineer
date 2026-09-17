@@ -167,5 +167,27 @@ def main():
     print(f"Terminé. {total_indexed} points upsertés, {total_skipped} sautés (déjà à jour).")
 
 
+    
+
+def hybrid_search(query: str, filters: dict | None = None, limit: int = 50):
+    dense_vec = EMBED_MODEL.encode(query, normalize_embeddings=True).tolist()
+    sparse_vec = list(bm25_model.embed([query]))[0]
+
+    qdrant_filter = build_filter(filters)  # -> models.Filter
+
+    results = qdrant.query_points(
+        collection_name=COLLECTION,
+        prefetch=[
+            models.Prefetch(query=dense_vec, using="dense", limit=limit, filter=qdrant_filter),
+            models.Prefetch(
+                query=models.SparseVector(indices=sparse_vec.indices.tolist(),
+                                           values=sparse_vec.values.tolist()),
+                using="bm25", limit=limit, filter=qdrant_filter,
+            ),
+        ],
+        query=models.FusionQuery(fusion=models.Fusion.RRF),
+        limit=limit,
+    )
+    return results.points
 if __name__ == "__main__":
     main()
