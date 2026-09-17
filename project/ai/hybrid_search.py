@@ -143,7 +143,7 @@ if __name__ == "__main__":
     # test rapide en ligne de commande
     points = hybrid_search(
         "livraison en retard et plats froids",
-        filters={"city": "Casablanca", "sentiment_label": "negative"},
+        filters={"sentiment_label": "negative"},
         limit=10,
     )
     for p in points:
