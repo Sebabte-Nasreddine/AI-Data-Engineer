@@ -8,12 +8,14 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from qdrant_client import QdrantClient, models
 from fastembed import SparseTextEmbedding
+from sentence_transformers import SentenceTransformer
 
+EMBED_MODEL = SentenceTransformer("sentence-transformers/distiluse-base-multilingual-cased-v2")
 load_dotenv()
 
 COLLECTION = "zomato_reviews"
 BATCH_SIZE = 128
-EMBED_MODEL = "text-embedding-3-small"
+
 
 # Colonnes réelles de ZOMATO.AI.REVIEW_SEARCH_DOC (cf. review_search_doc.sql)
 COLS = [
@@ -31,7 +33,6 @@ COLS = [
     "content_hash",
 ]
 
-openai_client = OpenAI()  # lit OPENAI_API_KEY depuis l'env
 qdrant = QdrantClient(url=os.environ.get("QDRANT_URL", "http://localhost:6333"))
 bm25_model = SparseTextEmbedding(model_name="Qdrant/bm25")
 
@@ -65,7 +66,7 @@ def fetch_batches(cursor):
 # --------------------------------------------------------------------------
 
 def embed_dense(texts: list[str]) -> list[list[float]]:
-    resp = openai_client.embeddings.create(model=EMBED_MODEL, input=texts)
+    resp = EMBED_MODEL.encode(texts)
     return [d.embedding for d in resp.data]
 
 
@@ -78,10 +79,10 @@ def embed_sparse(texts: list[str]):
 # Idempotence
 # --------------------------------------------------------------------------
 
-def point_id(review_id: str) -> str:
-    """UUID déterministe à partir de review_id -> upsert = pas de doublon."""
-    return str(hashlib.md5(review_id.encode()).hexdigest())
-
+def point_id(review_id) -> str:
+    """UUID déterministe à partir de review_id -> upsert = pas de doublon.
+    review_id peut arriver en int (NUMBER côté Snowflake) ou en str."""
+    return str(hashlib.md5(str(review_id).encode()).hexdigest())
 
 def get_existing_hashes(review_ids: list[str]) -> dict[str, str]:
     """review_id -> content_hash déjà présent dans Qdrant, pour sauter
