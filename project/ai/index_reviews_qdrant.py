@@ -66,9 +66,10 @@ def fetch_batches(cursor):
 # --------------------------------------------------------------------------
 
 def embed_dense(texts: list[str]) -> list[list[float]]:
-    resp = EMBED_MODEL.encode(texts)
-    return [d.embedding for d in resp.data]
-
+    # normalize_embeddings=True -> vecteurs unitaires, cohérent avec
+    # Distance.COSINE côté Qdrant
+    vecs = EMBED_MODEL.encode(texts, normalize_embeddings=True, show_progress_bar=False)
+    return vecs.tolist()
 
 def embed_sparse(texts: list[str]):
     # retourne une liste d'objets SparseEmbedding (indices + values numpy)
