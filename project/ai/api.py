@@ -29,10 +29,16 @@ from rerank import rerank, RankedResult
 
 app = FastAPI(title="Zomato RAG API", version="1.0")
 
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Ollama expose une API compatible OpenAI -> on garde le SDK openai,
+# on redirige juste base_url. La clé est ignorée par Ollama mais le SDK
+# exige une valeur non vide.
+llm_client = OpenAI(
+    base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+    api_key="ollama",
+)
 qdrant = QdrantClient(url=os.environ.get("QDRANT_URL", "http://localhost:6333"))
 
-CHAT_MODEL = "gpt-4o-mini"
+CHAT_MODEL = "qwen3:8b"
 PREFETCH_LIMIT = 50
 DEFAULT_TOP_K = 8
 
@@ -172,11 +178,12 @@ def chat(req: ChatRequest):
         p = r.payload
         context += f" ({p['city']}, {p['rating']} stars, {p['sentiment_label']}) {p['text']}\n"
 
-    response = openai_client.chat.completions.create(
+    response = llm_client.chat.completions.create(
         model=CHAT_MODEL,
         temperature=0.2,
         messages=[
             {"role": "system", "content": (
+                "/no_think\n"
                 "Answer ONLY using the customer reviews provided. "
                 "Be concise. If the reviews don't cover it, say so."
             )},
@@ -184,8 +191,14 @@ def chat(req: ChatRequest):
         ],
     )
 
+    answer = response.choices[0].message.content
+    # garde-fou : Qwen3 peut renvoyer un bloc <think>...</think> meme avec
+    # /no_think selon la version d'Ollama -> on le retire s'il est present
+    if "<think>" in answer and "</think>" in answer:
+        answer = answer.split("</think>", 1)[1].strip()
+
     return ChatResponse(
-        answer=response.choices[0].message.content,
+        answer=answer,
         sources=[_to_review_out(r) for r in top_reviews],
     )
 
