@@ -72,15 +72,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    environment:
-      # "qdrant" = nom du service ci-dessus, resolu via le reseau interne
-      # Docker Compose -> pas besoin de host.docker.internal ici, contrairement
-      # a Ollama qui reste sur la machine hote.
-      QDRANT_URL: "http://qdrant:6333"
-      OLLAMA_BASE_URL: "http://host.docker.internal:11434/v1"
-      SNOWFLAKE_ACCOUNT: "${SNOWFLAKE_ACCOUNT}"
-      SNOWFLAKE_USER: "${SNOWFLAKE_USER}"
-      SNOWFLAKE_PASSWORD: "${SNOWFLAKE_PASSWORD}"
+    env_file:
+      - ./env/.env
     volumes:
       # evite de re-telecharger le reranker (2.27GB) et le bi-encoder
       # a chaque rebuild du conteneur -> reutilise ton cache HF existant
