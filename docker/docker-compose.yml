@@ -56,8 +56,7 @@ services:
       - "3000:3000"
     env_file:
       # identifiants par defaut, a changer pour un usage au-dela du local
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      - ./env/.env.grafana
     volumes:
       - grafana_data:/var/lib/grafana
       # provisioning auto : datasource Prometheus configuree au demarrage,
