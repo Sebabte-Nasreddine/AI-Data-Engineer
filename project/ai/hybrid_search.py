@@ -27,7 +27,7 @@ COLLECTION = "zomato_reviews"
 
 EMBED_MODEL = SentenceTransformer("sentence-transformers/distiluse-base-multilingual-cased-v2")
 bm25_model = SparseTextEmbedding(model_name="Qdrant/bm25")
-qdrant = QdrantClient(url=os.environ.get("QDRANT_URL", "http://localhost:6333"))
+qdrant = QdrantClient(url=os.environ.get("QDRANT_URL", "http://qdrant:6333"))
 
 
 # --------------------------------------------------------------------------

@@ -28,8 +28,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from hybrid_search import hybrid_search, COLLECTION
 from rerank import rerank, RankedResult
 
-app = FastAPI(title="Zomato RAG API", version="1.0")
-
+app = FastAPI(title="Zomato RAG API", version="1.0", root_path="/api")
 # Middleware Prometheus : mesure automatiquement chaque requete HTTP
 # (methode, route, code de statut, duree) et expose le resultat sur /metrics.
 # Doit etre attache AVANT que l'app ne commence a servir des requetes,
@@ -43,7 +42,7 @@ llm_client = OpenAI(
     base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
     api_key="ollama",
 )
-qdrant = QdrantClient(url=os.environ.get("QDRANT_URL", "http://localhost:6333"))
+qdrant = QdrantClient(url=os.environ.get("QDRANT_URL", "http://qdrant:6333"))
 
 CHAT_MODEL = "qwen3:8b"
 PREFETCH_LIMIT = 50
