@@ -1,0 +1,19 @@
+services:
+
+   #FastAPI application
+
+
+
+
+   #nginx
+
+
+   #qdrant
+
+
+   #prometheus
+
+
+   #grafana
+
+   #node exporter for metrics
