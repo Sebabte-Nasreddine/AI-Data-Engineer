@@ -23,11 +23,18 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from openai import OpenAI
 from qdrant_client import QdrantClient, models
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from hybrid_search import hybrid_search, COLLECTION
 from rerank import rerank, RankedResult
 
 app = FastAPI(title="Zomato RAG API", version="1.0")
+
+# Middleware Prometheus : mesure automatiquement chaque requete HTTP
+# (methode, route, code de statut, duree) et expose le resultat sur /metrics.
+# Doit etre attache AVANT que l'app ne commence a servir des requetes,
+# donc juste apres la creation de `app`, avant les endpoints.
+Instrumentator().instrument(app).expose(app)
 
 # Ollama expose une API compatible OpenAI -> on garde le SDK openai,
 # on redirige juste base_url. La clé est ignorée par Ollama mais le SDK
@@ -57,6 +64,18 @@ class SearchFilters(BaseModel):
     rating_max: Optional[int] = None
     date_from: Optional[str] = None  # "YYYY-MM-DD"
     date_to: Optional[str] = None
+
+    model_config = {
+        "json_schema_extra": {
+            # remplace le placeholder auto-genere ("string"/0 sur tous les
+            # champs) par un exemple realiste dans Swagger -> evite d'envoyer
+            # des filtres bidon en cliquant juste "Try it out"
+            "example": {
+                "city": "Casablanca",
+                "sentiment_label": "negative",
+            }
+        }
+    }
 
     def to_dict(self) -> dict:
         # seuls les champs explicitement fournis vont dans le filtre Qdrant

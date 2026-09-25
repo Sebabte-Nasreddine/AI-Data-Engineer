@@ -1,11 +1,10 @@
 from datetime import datetime
 from airflow import DAG
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
-from airflow.providers.standard.operators.bash import BashOperator
+from airflow.providers.standard.operators.bash import BashOperator  # Airflow 3 import
 
 DBT = "/opt/airflow/dbt_venv/bin/dbt"
 DBT_PROJECT = "/opt/airflow/dbt/zomato"
-DBT_PROFILES = "/home/airflow/.dbt"
 
 COPY_RAW = [
     "USE WAREHOUSE ZOMATO_WH",
@@ -23,26 +22,18 @@ with DAG(
     start_date=datetime(2024, 1, 1),
     schedule="@daily",
     catchup=False,
-    tags=["zomato", "dbt", "snowflake"],
+    tags=["zomato", "dbt", "snowflake", "qdrant"],
     doc_md=__doc__,
 ) as dag:
 
     reload_raw = SQLExecuteQueryOperator(
-        task_id="reload_raw",
-        conn_id="snowflake_default",
-        sql=COPY_RAW,
-        split_statements=True,
-        autocommit=True,
+        task_id="reload_raw", conn_id="snowflake_default",
+        sql=COPY_RAW, split_statements=True, autocommit=True,
     )
 
     dbt_build_core = BashOperator(
         task_id="dbt_build_core",
-        bash_command=(
-            f"{DBT} build "
-            f"--exclude tag:ai "
-            f"--project-dir {DBT_PROJECT} "
-            f"--profiles-dir {DBT_PROFILES}"
-        ),
+        bash_command=f"{DBT} build --exclude tag:ai --project-dir {DBT_PROJECT} --profiles-dir {DBT_PROJECT}",
     )
 
     enrich_reviews = BashOperator(
@@ -52,12 +43,16 @@ with DAG(
 
     dbt_build_ai = BashOperator(
         task_id="dbt_build_ai",
-        bash_command=(
-            f"{DBT} build "
-            f"--select tag:ai "
-            f"--project-dir {DBT_PROJECT} "
-            f"--profiles-dir {DBT_PROFILES}"
-        ),
+        bash_command=f"{DBT} build --select tag:ai --project-dir {DBT_PROJECT} --profiles-dir {DBT_PROJECT}",
     )
 
-    reload_raw >> dbt_build_core >> enrich_reviews >> dbt_build_ai
+    # Nouvelle tache : reindexe Qdrant a partir de REVIEW_SEARCH_DOC, qui
+    # vient d'etre rafraichi (avec le sentiment_label a jour) par dbt_build_ai
+    # juste avant. Placee ICI et pas plus tot, car indexer avant dbt_build_ai
+    # reviendrait a pousser dans Qdrant un sentiment_label perime.
+    index_qdrant = BashOperator(
+        task_id="index_qdrant",
+        bash_command="python /opt/airflow/ai/index_reviews_qdrant.py",
+    )
+
+    reload_raw >> dbt_build_core >> enrich_reviews >> dbt_build_ai >> index_qdrant
