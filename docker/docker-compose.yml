@@ -19,7 +19,14 @@ services:
     restart: unless-stopped
 
    #prometheus
-
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    restart: unless-stopped
 
    #grafana
 
