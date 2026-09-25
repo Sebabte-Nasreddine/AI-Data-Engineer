@@ -23,6 +23,15 @@ x-airflow-common: &airflow-common
     OPENAI_API_KEY: ${OPENAI_API_KEY}
     SAMPLE_N: ${SAMPLE_N:-5}
     AIRFLOW_CONN_SNOWFLAKE_DEFAULT: '{"conn_type":"snowflake","login":"${SNOWFLAKE_USER}","password":"${SNOWFLAKE_PASSWORD}","schema":"RAW","extra":{"account":"${SNOWFLAKE_ACCOUNT}","warehouse":"ZOMATO_WH","database":"ZOMATO","role":"DBT_ROLE"}}'
+    # Lu par ai/index_reviews_qdrant.py -> "qdrant" resolu via le reseau
+    # zomato_shared, partage avec le stack docker/docker-compose.yaml.
+    QDRANT_URL: 'http://qdrant:6333'
+    # Airflow emet ses metriques (duree des taches, succes/echec des DAG runs)
+    # via StatsD -> statsd_exporter les reexpose en /metrics pour Prometheus.
+    AIRFLOW__METRICS__STATSD_ON: 'True'
+    AIRFLOW__METRICS__STATSD_HOST: 'statsd_exporter'
+    AIRFLOW__METRICS__STATSD_PORT: '8125'
+    AIRFLOW__METRICS__STATSD_PREFIX: 'airflow'
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -32,6 +41,12 @@ x-airflow-common: &airflow-common
   depends_on:
     postgres:
       condition: service_healthy
+  # zomato_shared : reseau externe partage avec docker/docker-compose.yaml
+  # (qdrant, statsd_exporter y vivent) -> resolution par nom de service,
+  # plus besoin de host.docker.internal pour ces deux liaisons.
+  networks:
+    - default
+    - zomato_shared
 
 services:
   postgres:
@@ -72,6 +87,16 @@ services:
     depends_on:
       airflow-init:
         condition: service_completed_successfully
+    # LocalExecutor -> les taches (dont index_qdrant, qui charge le
+    # bi-encoder + tourne sur "cuda") s'executent DANS ce conteneur.
+    # C'est le seul des 3 services Airflow qui a besoin du GPU.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   dag-processor:
     <<: *airflow-common
@@ -83,3 +108,7 @@ services:
 
 volumes:
   pgdata:
+
+networks:
+  zomato_shared:
+    external: true   # cree une fois : docker network create zomato_shared

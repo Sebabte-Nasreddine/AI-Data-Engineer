@@ -34,7 +34,7 @@ app = FastAPI(title="Zomato RAG API", version="1.0")
 # (methode, route, code de statut, duree) et expose le resultat sur /metrics.
 # Doit etre attache AVANT que l'app ne commence a servir des requetes,
 # donc juste apres la creation de `app`, avant les endpoints.
-Instrumentator().instrument(app).expose(app)
+Instrumentator().instrument(app).expose(app, endpoint="/TrhBVe_m5gg2002_E5VVqS")
 
 # Ollama expose une API compatible OpenAI -> on garde le SDK openai,
 # on redirige juste base_url. La clé est ignorée par Ollama mais le SDK

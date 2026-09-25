@@ -1,14 +1,32 @@
 services:
 
-   #FastAPI application
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    ports:
+      - "9100:9100"
+    volumes:
+      # montage en lecture seule des pseudo-filesystems hote -> node-exporter
+      # lit /proc et /sys pour ses metriques (CPU, RAM, disque, reseau)
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+    restart: unless-stopped
 
+  statsd_exporter:
+    image: prom/statsd-exporter:v0.27.1
+    command: "--statsd.listen-udp=:8125 --web.listen-address=:9102"
+    ports:
+      - "9102:9102"   # /metrics, scrape par Prometheus
+      - "8125:8125/udp"   # reception StatsD depuis Airflow
+    restart: unless-stopped
+    networks:
+      - default
+      - zomato_shared   # doit etre joignable par le scheduler Airflow (autre stack)
 
-
-
-   #nginx
-
-
-   #qdrant
   qdrant:
     image: qdrant/qdrant:v1.12.4
     ports:
@@ -17,17 +35,90 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
     restart: unless-stopped
+    networks:
+      - default
+      - zomato_shared   # rejoint aussi par le stack Airflow -> plus besoin de host.docker.internal pour ce lien
 
-   #prometheus
   prometheus:
     image: prom/prometheus:v2.55.1
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # indispensable sur Linux
 
-   #grafana
+  grafana:
+    image: grafana/grafana:11.3.0
+    ports:
+      - "3000:3000"
+    env_file:
+      # identifiants par defaut, a changer pour un usage au-dela du local
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      # provisioning auto : datasource Prometheus configuree au demarrage,
+      # pas besoin de le faire a la main dans l'UI a chaque recreation
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
 
-   #node exporter for metrics
+  api:
+    build:
+      context: ../project/ai
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # "qdrant" = nom du service ci-dessus, resolu via le reseau interne
+      # Docker Compose -> pas besoin de host.docker.internal ici, contrairement
+      # a Ollama qui reste sur la machine hote.
+      QDRANT_URL: "http://qdrant:6333"
+      OLLAMA_BASE_URL: "http://host.docker.internal:11434/v1"
+      SNOWFLAKE_ACCOUNT: "${SNOWFLAKE_ACCOUNT}"
+      SNOWFLAKE_USER: "${SNOWFLAKE_USER}"
+      SNOWFLAKE_PASSWORD: "${SNOWFLAKE_PASSWORD}"
+    volumes:
+      # evite de re-telecharger le reranker (2.27GB) et le bi-encoder
+      # a chaque rebuild du conteneur -> reutilise ton cache HF existant
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # pour joindre Ollama sur l'hote
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+      - qdrant
+      - prometheus
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # pour proxy_pass vers Airflow (autre stack)
+
+volumes:
+  qdrant_storage:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  zomato_shared:
+    external: true   # cree une fois via `docker network create zomato_shared`,
+                      # partage entre ce stack et airflow/docker-compose.yaml
