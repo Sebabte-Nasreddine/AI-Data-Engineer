@@ -1,0 +1,12 @@
+fastapi==0.115.*
+uvicorn[standard]==0.32.*
+pydantic==2.*
+prometheus-fastapi-instrumentator==7.*
+
+qdrant-client[fastembed]==1.12.*
+sentence-transformers==3.*
+torch==2.4.*
+
+openai==1.*
+python-dotenv==1.*
+snowflake-connector-python==3.*
